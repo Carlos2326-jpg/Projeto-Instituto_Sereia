@@ -1,0 +1,21 @@
+CREATE DATABASE IF NOT EXISTS instituto_sereia
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE instituto_sereia;
+
+CREATE TABLE IF NOT EXISTS usuarios (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(100) NOT NULL,
+  usuario VARCHAR(50) NOT NULL UNIQUE,
+  senha_hash VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS voluntarios (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(150) NOT NULL,
+  email VARCHAR(150),
+  telefone VARCHAR(30),
+  cpf CHAR(11) NOT NULL UNIQUE,
+  sexo VARCHAR(20),
+  idade INT,
+  estado_civil VARCHAR(30)
+);
