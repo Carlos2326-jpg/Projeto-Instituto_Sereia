@@ -1,0 +1,58 @@
+@import '../../variables.css';
+
+.profile-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.info-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-6);
+  margin-bottom: var(--spacing-6);
+}
+
+.info-card h3 {
+  color: var(--color-primary);
+  font-size: 1.125rem;
+  margin-bottom: var(--spacing-6);
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-6) var(--spacing-8);
+}
+
+.info-item label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.info-item p {
+  font-size: 0.875rem;
+  color: var(--color-text-main);
+  font-weight: 500;
+}
+
+.action-buttons {
+  display: flex;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-8);
+}
+
+@media (max-width: 768px) {
+  .info-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-4);
+  }
+  .action-buttons {
+    flex-direction: column;
+  }
+  .action-buttons .btn {
+    width: 100%;
+  }
+}
