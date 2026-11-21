@@ -1,88 +1,60 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Award } from "lucide-react";
+import { ArrowLeft, Award, Calendar } from "lucide-react";
 import { AppLayout } from "../../Components/layout/AppLayout";
 import { Button } from "../../Components/ui/Button";
 import { Badge } from "../../Components/ui/Badge";
 import { api } from "../../Services/api";
+import {
+  formatarCodigo,
+  formatarCpf,
+  formatarEndereco,
+  formatarData,
+} from "../../Utils/formatadores";
 import "../../Assets/Styles/Pages/Voluntarios/DetalhesVoluntario.css";
 
 export default function DetalhesVoluntario() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [voluntario, setVoluntario] = useState(null);
-  const [naoEncontrado, setNaoEncontrado] = useState(false);
+  const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
-    api
-      .get(`/voluntarios/${id}`)
-      .then((res) => {
-        if (res.data) setVoluntario(res.data);
-        else setNaoEncontrado(true);
-      })
-      .catch(() => setNaoEncontrado(true));
+    carregarVoluntario();
   }, [id]);
+
+  async function carregarVoluntario() {
+    try {
+      const resposta = await api.get(`/voluntarios/${id}`);
+      setVoluntario(resposta.data);
+    } catch (erro) {
+      alert("Erro ao carregar os dados.");
+      navigate("/voluntarios");
+    } finally {
+      setCarregando(false);
+    }
+  }
 
   async function alternarStatus() {
     const novoStatus = voluntario.status === "Ativo" ? "Inativo" : "Ativo";
     try {
-      await api.patch(`/voluntarios/${voluntario.id}/status`, {
-        status: novoStatus,
-      });
+      await api.patch(`/voluntarios/${id}/status`, { status: novoStatus });
       setVoluntario({ ...voluntario, status: novoStatus });
-    } catch (err) {
-      alert(err.response?.data?.erro || "Erro ao alterar status.");
+    } catch (erro) {
+      alert("Erro ao alterar status.");
     }
   }
 
-  async function excluir() {
-    if (
-      !window.confirm(
-        `Excluir o cadastro de ${voluntario.nome}? Essa ação não pode ser desfeita.`,
-      )
-    )
-      return;
-    try {
-      await api.delete(`/voluntarios/${voluntario.id}`);
-      navigate("/voluntarios");
-    } catch (err) {
-      alert(err.response?.data?.erro || "Erro ao excluir.");
-    }
-  }
-
-  function formatarCpf(cpf) {
-    const n = String(cpf || "").replace(/\D/g, "");
-    return n.length === 11
-      ? n.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
-      : cpf;
-  }
-
-  function formatarData(data) {
-    return data ? data.split("-").reverse().join("/") : "Não informada";
-  }
-
-  function montarEndereco(v) {
-    const partes = [
-      v.logradouro && v.numero ? `${v.logradouro}, ${v.numero}` : v.logradouro,
-      v.complemento,
-      v.bairro,
-      v.cidade,
-      v.cep,
-    ].filter(Boolean);
-    return partes.length ? partes.join(" — ") : "Não informado";
-  }
-
-  if (naoEncontrado)
+  if (carregando)
     return (
       <AppLayout>
-        <p>Voluntário não encontrado.</p>
+        <p style={{ padding: "24px" }}>Carregando...</p>
       </AppLayout>
     );
-
   if (!voluntario)
     return (
       <AppLayout>
-        <p>Carregando...</p>
+        <p style={{ padding: "24px" }}>Voluntário não encontrado.</p>
       </AppLayout>
     );
 
@@ -114,7 +86,7 @@ export default function DetalhesVoluntario() {
           <div className="info-grid">
             <div className="info-item">
               <label>Código</label>
-              <p>{`VOL-${String(voluntario.id).padStart(4, "0")}`}</p>
+              <p>{formatarCodigo(voluntario.id, "VOL")}</p>
             </div>
             <div className="info-item">
               <label>Status</label>
@@ -132,31 +104,21 @@ export default function DetalhesVoluntario() {
             </div>
             <div className="info-item">
               <label>Data de nascimento</label>
-              <p>{formatarData(voluntario.data_nascimento)}</p>
+              <p>
+                {formatarData(voluntario.data_nascimento) || "Não informada"}
+              </p>
             </div>
             <div className="info-item">
               <label>E-mail</label>
-              <p>{voluntario.email}</p>
+              <p>{voluntario.email || "Não informado"}</p>
             </div>
             <div className="info-item">
               <label>Telefone</label>
-              <p>{voluntario.telefone}</p>
-            </div>
-            <div className="info-item">
-              <label>Sexo</label>
-              <p>{voluntario.sexo}</p>
-            </div>
-            <div className="info-item">
-              <label>Idade</label>
-              <p>{voluntario.idade ?? "Não informada"}</p>
-            </div>
-            <div className="info-item">
-              <label>Estado civil</label>
-              <p>{voluntario.estado_civil}</p>
+              <p>{voluntario.telefone || "Não informado"}</p>
             </div>
             <div className="info-item">
               <label>Endereço</label>
-              <p>{montarEndereco(voluntario)}</p>
+              <p>{formatarEndereco(voluntario)}</p>
             </div>
           </div>
         </div>
@@ -173,19 +135,60 @@ export default function DetalhesVoluntario() {
               ? "Inativar cadastro"
               : "Ativar cadastro"}
           </Button>
-          <Button variant="outline" onClick={excluir}>
-            Excluir cadastro
-          </Button>
         </div>
 
         <div className="info-card">
-          <h3>Participações em eventos e certificados</h3>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <h3>Participações em eventos</h3>
+          {/* Bloco estático simulando histórico */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              marginBottom: "16px",
+            }}
+          >
+            <div
+              style={{
+                background: "var(--color-bg-body)",
+                padding: "8px",
+                borderRadius: "50%",
+              }}
+            >
+              <Calendar size={20} color="var(--color-primary)" />
+            </div>
+            <div>
+              <p style={{ fontWeight: 500 }}>Ação comunitária</p>
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                07/11/2026 • 4 horas • Presente
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="info-card">
+          <h3>Certificados</h3>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              marginBottom: "16px",
+            }}
+          >
             <Award size={20} color="var(--color-primary)" />
             <p style={{ fontSize: "0.875rem" }}>
-              Eventos e certificados ainda serão implementados.
+              CER-2026-0186 • Ação comunitária • Válido
             </p>
           </div>
+          <Button variant="outline" style={{ width: "auto" }}>
+            Visualizar certificado
+          </Button>
         </div>
       </div>
     </AppLayout>
