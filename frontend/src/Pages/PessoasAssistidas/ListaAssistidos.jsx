@@ -4,7 +4,7 @@ import { Search, Filter, Download } from "lucide-react";
 import { AppLayout } from "../../Components/layout/AppLayout";
 import { Button } from "../../Components/ui/Button";
 import { Badge } from "../../Components/ui/Badge";
-import { mockAssistidos } from "../../Services/mockData";
+import { api } from "../../Services/api";
 import "../../Assets/Styles/Pages/Voluntarios/ListaVoluntarios.css";
 
 export default function ListaAssistidos() {
@@ -14,11 +14,45 @@ export default function ListaAssistidos() {
   const [busca, setBusca] = useState("");
 
   useEffect(() => {
-    setTimeout(() => {
-      setAssistidos(mockAssistidos);
-      setCarregando(false);
-    }, 1000);
+    api
+      .get("/assistidos")
+      .then((res) => setAssistidos(res.data))
+      .catch(() => alert("Erro ao carregar pessoas assistidas."))
+      .finally(() => setCarregando(false));
   }, []);
+
+  function gerarCodigo(v) {
+    return `PAS-${String(v.id).padStart(4, "0")}`;
+  }
+
+  async function excluir(v) {
+    if (
+      !window.confirm(
+        `Excluir o cadastro de ${v.nome}? Essa ação não pode ser desfeita.`,
+      )
+    )
+      return;
+    try {
+      await api.delete(`/assistidos/${v.id}`);
+      setAssistidos(assistidos.filter((x) => x.id !== v.id));
+    } catch (err) {
+      alert(err.response?.data?.erro || "Erro ao excluir.");
+    }
+  }
+
+  async function alternarStatus(v) {
+    const novoStatus = v.status === "Ativo" ? "Inativo" : "Ativo";
+    try {
+      await api.patch(`/assistidos/${v.id}/status`, { status: novoStatus });
+      setAssistidos(
+        assistidos.map((x) =>
+          x.id === v.id ? { ...x, status: novoStatus } : x,
+        ),
+      );
+    } catch (err) {
+      alert(err.response?.data?.erro || "Erro ao alterar status.");
+    }
+  }
 
   const filtrados = assistidos.filter((v) =>
     v.nome.toLowerCase().includes(busca.toLowerCase()),
@@ -91,7 +125,7 @@ export default function ListaAssistidos() {
               <tbody>
                 {filtrados.map((v) => (
                   <tr key={v.id}>
-                    <td>{v.codigo}</td>
+                    <td>{gerarCodigo(v)}</td>
                     <td
                       style={{
                         fontWeight: 500,
@@ -119,7 +153,18 @@ export default function ListaAssistidos() {
                       >
                         Editar
                       </span>
-                      <span className="action-link danger">Inativar</span>
+                      <span
+                        className="action-link danger"
+                        onClick={() => alternarStatus(v)}
+                      >
+                        {v.status === "Ativo" ? "Inativar" : "Ativar"}
+                      </span>
+                      <span
+                        className="action-link danger"
+                        onClick={() => excluir(v)}
+                      >
+                        Excluir
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -132,7 +177,7 @@ export default function ListaAssistidos() {
               <div key={v.id} className="volunteer-card">
                 <h3>{v.nome}</h3>
                 <div className="card-info">
-                  Código: <strong>{v.codigo}</strong>
+                  Código: <strong>{gerarCodigo(v)}</strong>
                 </div>
                 <div className="card-info">
                   CPF:{" "}
@@ -160,7 +205,18 @@ export default function ListaAssistidos() {
                   >
                     Editar
                   </span>
-                  <span className="action-link danger">Inativar</span>
+                  <span
+                    className="action-link danger"
+                    onClick={() => alternarStatus(v)}
+                  >
+                    {v.status === "Ativo" ? "Inativar" : "Ativar"}
+                  </span>
+                  <span
+                    className="action-link danger"
+                    onClick={() => excluir(v)}
+                  >
+                    Excluir
+                  </span>
                 </div>
               </div>
             ))}

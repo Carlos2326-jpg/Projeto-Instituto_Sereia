@@ -1,22 +1,83 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Award, Calendar } from "lucide-react";
+import { ArrowLeft, Award } from "lucide-react";
 import { AppLayout } from "../../Components/layout/AppLayout";
 import { Button } from "../../Components/ui/Button";
 import { Badge } from "../../Components/ui/Badge";
-import { mockVoluntarios } from "../../Services/mockData";
+import { api } from "../../Services/api";
 import "../../Assets/Styles/Pages/Voluntarios/DetalhesVoluntario.css";
 
 export default function DetalhesVoluntario() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [voluntario, setVoluntario] = useState(null);
+  const [naoEncontrado, setNaoEncontrado] = useState(false);
 
   useEffect(() => {
-    // Simula busca por ID
-    const encontrado = mockVoluntarios.find((v) => v.id === Number(id));
-    setVoluntario(encontrado);
+    api
+      .get(`/voluntarios/${id}`)
+      .then((res) => {
+        if (res.data) setVoluntario(res.data);
+        else setNaoEncontrado(true);
+      })
+      .catch(() => setNaoEncontrado(true));
   }, [id]);
+
+  async function alternarStatus() {
+    const novoStatus = voluntario.status === "Ativo" ? "Inativo" : "Ativo";
+    try {
+      await api.patch(`/voluntarios/${voluntario.id}/status`, {
+        status: novoStatus,
+      });
+      setVoluntario({ ...voluntario, status: novoStatus });
+    } catch (err) {
+      alert(err.response?.data?.erro || "Erro ao alterar status.");
+    }
+  }
+
+  async function excluir() {
+    if (
+      !window.confirm(
+        `Excluir o cadastro de ${voluntario.nome}? Essa ação não pode ser desfeita.`,
+      )
+    )
+      return;
+    try {
+      await api.delete(`/voluntarios/${voluntario.id}`);
+      navigate("/voluntarios");
+    } catch (err) {
+      alert(err.response?.data?.erro || "Erro ao excluir.");
+    }
+  }
+
+  function formatarCpf(cpf) {
+    const n = String(cpf || "").replace(/\D/g, "");
+    return n.length === 11
+      ? n.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
+      : cpf;
+  }
+
+  function formatarData(data) {
+    return data ? data.split("-").reverse().join("/") : "Não informada";
+  }
+
+  function montarEndereco(v) {
+    const partes = [
+      v.logradouro && v.numero ? `${v.logradouro}, ${v.numero}` : v.logradouro,
+      v.complemento,
+      v.bairro,
+      v.cidade,
+      v.cep,
+    ].filter(Boolean);
+    return partes.length ? partes.join(" — ") : "Não informado";
+  }
+
+  if (naoEncontrado)
+    return (
+      <AppLayout>
+        <p>Voluntário não encontrado.</p>
+      </AppLayout>
+    );
 
   if (!voluntario)
     return (
@@ -53,7 +114,7 @@ export default function DetalhesVoluntario() {
           <div className="info-grid">
             <div className="info-item">
               <label>Código</label>
-              <p>{voluntario.codigo}</p>
+              <p>{`VOL-${String(voluntario.id).padStart(4, "0")}`}</p>
             </div>
             <div className="info-item">
               <label>Status</label>
@@ -67,11 +128,11 @@ export default function DetalhesVoluntario() {
             </div>
             <div className="info-item">
               <label>CPF</label>
-              <p>***.***.***-**</p>
+              <p>{formatarCpf(voluntario.cpf)}</p>
             </div>
             <div className="info-item">
               <label>Data de nascimento</label>
-              <p>{voluntario.dataNascimento}</p>
+              <p>{formatarData(voluntario.data_nascimento)}</p>
             </div>
             <div className="info-item">
               <label>E-mail</label>
@@ -82,8 +143,20 @@ export default function DetalhesVoluntario() {
               <p>{voluntario.telefone}</p>
             </div>
             <div className="info-item">
+              <label>Sexo</label>
+              <p>{voluntario.sexo}</p>
+            </div>
+            <div className="info-item">
+              <label>Idade</label>
+              <p>{voluntario.idade ?? "Não informada"}</p>
+            </div>
+            <div className="info-item">
+              <label>Estado civil</label>
+              <p>{voluntario.estado_civil}</p>
+            </div>
+            <div className="info-item">
               <label>Endereço</label>
-              <p>{voluntario.endereco}</p>
+              <p>{montarEndereco(voluntario)}</p>
             </div>
           </div>
         </div>
@@ -95,86 +168,24 @@ export default function DetalhesVoluntario() {
           >
             Editar cadastro
           </Button>
-          <Button variant="outline">
+          <Button variant="outline" onClick={alternarStatus}>
             {voluntario.status === "Ativo"
               ? "Inativar cadastro"
               : "Ativar cadastro"}
           </Button>
+          <Button variant="outline" onClick={excluir}>
+            Excluir cadastro
+          </Button>
         </div>
 
         <div className="info-card">
-          <h3>Participações em eventos</h3>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              marginBottom: "16px",
-            }}
-          >
-            <div
-              style={{
-                background: "var(--color-bg-body)",
-                padding: "8px",
-                borderRadius: "50%",
-              }}
-            >
-              <Calendar size={20} color="var(--color-primary)" />
-            </div>
-            <div>
-              <p style={{ fontWeight: 500 }}>Ação comunitária</p>
-              <p
-                style={{
-                  fontSize: "0.75rem",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                07/11/2026 • 4 horas • Presente
-              </p>
-            </div>
-          </div>
+          <h3>Participações em eventos e certificados</h3>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div
-              style={{
-                background: "var(--color-bg-body)",
-                padding: "8px",
-                borderRadius: "50%",
-              }}
-            >
-              <Calendar size={20} color="var(--color-primary)" />
-            </div>
-            <div>
-              <p style={{ fontWeight: 500 }}>Mutirão do bem</p>
-              <p
-                style={{
-                  fontSize: "0.75rem",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                31/10/2026 • 6 horas • Presente
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="info-card">
-          <h3>Certificados</h3>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              marginBottom: "16px",
-            }}
-          >
             <Award size={20} color="var(--color-primary)" />
             <p style={{ fontSize: "0.875rem" }}>
-              CER-2026-0186 • Ação comunitária • Válido
+              Eventos e certificados ainda serão implementados.
             </p>
           </div>
-          <Button variant="outline" style={{ width: "auto" }}>
-            Visualizar certificado
-          </Button>
         </div>
       </div>
     </AppLayout>

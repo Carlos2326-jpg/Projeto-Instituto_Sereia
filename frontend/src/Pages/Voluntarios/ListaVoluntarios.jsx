@@ -4,7 +4,7 @@ import { Search, Filter, Download } from "lucide-react";
 import { AppLayout } from "../../Components/layout/AppLayout";
 import { Button } from "../../Components/ui/Button";
 import { Badge } from "../../Components/ui/Badge";
-import { mockVoluntarios } from "../../Services/mockData"; 
+import { api } from "../../Services/api";
 import "../../Assets/Styles/Pages/Voluntarios/ListaVoluntarios.css";
 
 export default function ListaVoluntarios() {
@@ -14,11 +14,45 @@ export default function ListaVoluntarios() {
   const [busca, setBusca] = useState("");
 
   useEffect(() => {
-    setTimeout(() => {
-      setVoluntarios(mockVoluntarios);
-      setCarregando(false);
-    }, 1000);
+    api
+      .get("/voluntarios")
+      .then((res) => setVoluntarios(res.data))
+      .catch(() => alert("Erro ao carregar voluntários."))
+      .finally(() => setCarregando(false));
   }, []);
+
+  function gerarCodigo(v) {
+    return `VOL-${String(v.id).padStart(4, "0")}`;
+  }
+
+  async function excluir(v) {
+    if (
+      !window.confirm(
+        `Excluir o cadastro de ${v.nome}? Essa ação não pode ser desfeita.`,
+      )
+    )
+      return;
+    try {
+      await api.delete(`/voluntarios/${v.id}`);
+      setVoluntarios(voluntarios.filter((x) => x.id !== v.id));
+    } catch (err) {
+      alert(err.response?.data?.erro || "Erro ao excluir.");
+    }
+  }
+
+  async function alternarStatus(v) {
+    const novoStatus = v.status === "Ativo" ? "Inativo" : "Ativo";
+    try {
+      await api.patch(`/voluntarios/${v.id}/status`, { status: novoStatus });
+      setVoluntarios(
+        voluntarios.map((x) =>
+          x.id === v.id ? { ...x, status: novoStatus } : x,
+        ),
+      );
+    } catch (err) {
+      alert(err.response?.data?.erro || "Erro ao alterar status.");
+    }
+  }
 
   const voluntariosFiltrados = voluntarios.filter((v) =>
     v.nome.toLowerCase().includes(busca.toLowerCase()),
@@ -38,6 +72,7 @@ export default function ListaVoluntarios() {
         </Button>
       </div>
 
+      {/* BARRA DE ESTATÍSTICAS: contagem de ativos e inativos */}
       <div className="stats-bar">
         <strong>{voluntarios.length} cadastrados</strong>
         <span style={{ color: "var(--color-text-muted)" }}>
@@ -75,6 +110,7 @@ export default function ListaVoluntarios() {
         </div>
       ) : (
         <>
+          {/* TABELA (computador) */}
           <div className="table-container">
             <table className="data-table">
               <thead>
@@ -84,14 +120,14 @@ export default function ListaVoluntarios() {
                   <th>CPF</th>
                   <th>E-mail</th>
                   <th>Telefone</th>
-                  <th>Status</th>
+                  <th>Status</th> {/* <- cabeçalho do status */}
                   <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {voluntariosFiltrados.map((v) => (
                   <tr key={v.id}>
-                    <td>{v.codigo}</td>
+                    <td>{gerarCodigo(v)}</td>
                     <td
                       style={{
                         fontWeight: 500,
@@ -104,6 +140,7 @@ export default function ListaVoluntarios() {
                     <td>{v.email}</td>
                     <td>{v.telefone}</td>
                     <td>
+                      {/* <- selo do status em cada linha */}
                       <Badge status={v.status}>{v.status}</Badge>
                     </td>
                     <td>
@@ -119,7 +156,18 @@ export default function ListaVoluntarios() {
                       >
                         Editar
                       </span>
-                      <span className="action-link danger">Inativar</span>
+                      <span
+                        className="action-link danger"
+                        onClick={() => alternarStatus(v)}
+                      >
+                        {v.status === "Ativo" ? "Inativar" : "Ativar"}
+                      </span>
+                      <span
+                        className="action-link danger"
+                        onClick={() => excluir(v)}
+                      >
+                        Excluir
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -127,12 +175,13 @@ export default function ListaVoluntarios() {
             </table>
           </div>
 
+          {/* CARDS (celular) */}
           <div className="cards-container">
             {voluntariosFiltrados.map((v) => (
               <div key={v.id} className="volunteer-card">
                 <h3>{v.nome}</h3>
                 <div className="card-info">
-                  Código: <strong>{v.codigo}</strong>
+                  Código: <strong>{gerarCodigo(v)}</strong>
                 </div>
                 <div className="card-info">
                   CPF: <strong>***.***.***-**</strong>
@@ -144,6 +193,7 @@ export default function ListaVoluntarios() {
                   Telefone: <strong>{v.telefone}</strong>
                 </div>
                 <div style={{ marginTop: "12px" }}>
+                  {/* <- selo do status no card */}
                   <Badge status={v.status}>{v.status}</Badge>
                 </div>
                 <div className="card-actions">
@@ -159,7 +209,18 @@ export default function ListaVoluntarios() {
                   >
                     Editar
                   </span>
-                  <span className="action-link danger">Inativar</span>
+                  <span
+                    className="action-link danger"
+                    onClick={() => alternarStatus(v)}
+                  >
+                    {v.status === "Ativo" ? "Inativar" : "Ativar"}
+                  </span>
+                  <span
+                    className="action-link danger"
+                    onClick={() => excluir(v)}
+                  >
+                    Excluir
+                  </span>
                 </div>
               </div>
             ))}

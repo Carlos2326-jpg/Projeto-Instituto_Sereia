@@ -23,7 +23,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
+    if (
+      error.response &&
+      error.response.status === 401 &&
+      !error.config.url.includes('/login')
+    ) {
       // Se o token expirou, remove a sessão e recarrega a página (volta pro login)
       sessionStorage.removeItem('sessao');
       window.location.href = '/login';

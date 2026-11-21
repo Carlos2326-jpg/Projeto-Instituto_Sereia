@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { AppLayout } from "../../Components/layout/AppLayout";
 import { Button } from "../../Components/ui/Button";
 import { Input } from "../../Components/ui/Input";
-import { mockAssistidos } from "../../Services/mockData";
+import { api } from "../../Services/api";
 import "../../Assets/Styles/Pages/Voluntarios/FormularioVoluntario.css";
 
 export default function FormularioAssistido() {
@@ -15,7 +15,7 @@ export default function FormularioAssistido() {
   const [formData, setFormData] = useState({
     nome: "",
     cpf: "",
-    dataNascimento: "",
+    data_nascimento: "",
     email: "",
     telefone: "",
     cep: "",
@@ -28,30 +28,36 @@ export default function FormularioAssistido() {
 
   useEffect(() => {
     if (isEdicao) {
-      const assistido = mockAssistidos.find((v) => v.id === Number(id));
-      if (assistido) {
-        setFormData({
-          ...formData,
-          ...assistido,
-          cpf: assistido.cpf || "",
-          email: assistido.email || "",
-        });
-      }
+      api.get(`/assistidos/${id}`).then((res) => {
+        if (res.data) {
+          // troca valores vazios (null) por texto vazio
+          const dados = Object.fromEntries(
+            Object.entries(res.data).map(([k, v]) => [k, v ?? ""]),
+          );
+          setFormData((atual) => ({ ...atual, ...dados }));
+        }
+      });
     }
-  }, [id]);
+  }, [id, isEdicao]);
 
   function handleChange(e) {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    alert(
-      isEdicao
-        ? "Dados atualizados (Simulação)"
-        : "Pessoa assistida cadastrada (Simulação)",
-    );
-    navigate("/assistidos");
+    try {
+      if (isEdicao) {
+        await api.put(`/assistidos/${id}`, formData);
+      } else {
+        await api.post("/assistidos", formData);
+      }
+      navigate("/assistidos");
+    } catch (err) {
+      alert(
+        err.response?.data?.erro || "Erro ao salvar. O servidor está ligado?",
+      );
+    }
   }
 
   return (
@@ -63,7 +69,7 @@ export default function FormularioAssistido() {
 
         <h1 className="page-title">
           {isEdicao
-            ? "Editar pessoas assistidas"
+            ? "Editar pessoa assistida"
             : "Novo cadastro • pessoas assistidas"}
         </h1>
         <p className="page-subtitle" style={{ marginBottom: "24px" }}>
@@ -91,9 +97,9 @@ export default function FormularioAssistido() {
               />
               <Input
                 label="Data de nascimento"
-                name="dataNascimento"
+                name="data_nascimento"
                 type="date"
-                value={formData.dataNascimento}
+                value={formData.data_nascimento}
                 onChange={handleChange}
               />
               <Input

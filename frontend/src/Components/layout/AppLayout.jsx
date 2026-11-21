@@ -4,7 +4,8 @@ import {
   LayoutDashboard, Users, Heart, Calendar, 
   CheckSquare, Award, BarChart, Settings, LogOut, Menu, Bell, Search
 } from 'lucide-react';
-import '../../Assets/Styles/layout/AppLayout.css'; 
+import '../../Assets/Styles/layout/AppLayout.css';
+import { useAuth } from '../../Controllers/AuthContext';
 
 export function AppLayout({ children }) {
   const navigate = useNavigate();
@@ -16,9 +17,11 @@ export function AppLayout({ children }) {
   if (location.pathname.includes('voluntarios')) paginaAtual = 'Voluntários';
   if (location.pathname.includes('assistidos')) paginaAtual = 'Pessoas Assistidas';
 
-  function handleSair() {
-    navigate('/login');
-  }
+ const { sair } = useAuth();
+function handleSair() {
+  sair();
+  navigate('/login');
+}
 
   return (
     <div className="app-container">

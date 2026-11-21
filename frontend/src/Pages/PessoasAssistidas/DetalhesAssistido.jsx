@@ -4,18 +4,80 @@ import { ArrowLeft, Calendar } from "lucide-react";
 import { AppLayout } from "../../Components/layout/AppLayout";
 import { Button } from "../../Components/ui/Button";
 import { Badge } from "../../Components/ui/Badge";
-import { mockAssistidos } from "../../Services/mockData";
+import { api } from "../../Services/api";
 import "../../Assets/Styles/Pages/Voluntarios/DetalhesVoluntario.css";
 
 export default function DetalhesAssistido() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [assistido, setAssistido] = useState(null);
+  const [naoEncontrado, setNaoEncontrado] = useState(false);
 
   useEffect(() => {
-    const encontrado = mockAssistidos.find((v) => v.id === Number(id));
-    setAssistido(encontrado);
+    api
+      .get(`/assistidos/${id}`)
+      .then((res) => {
+        if (res.data) setAssistido(res.data);
+        else setNaoEncontrado(true);
+      })
+      .catch(() => setNaoEncontrado(true));
   }, [id]);
+
+  async function alternarStatus() {
+    const novoStatus = assistido.status === "Ativo" ? "Inativo" : "Ativo";
+    try {
+      await api.patch(`/assistidos/${assistido.id}/status`, {
+        status: novoStatus,
+      });
+      setAssistido({ ...assistido, status: novoStatus });
+    } catch (err) {
+      alert(err.response?.data?.erro || "Erro ao alterar status.");
+    }
+  }
+
+  async function excluir() {
+    if (
+      !window.confirm(
+        `Excluir o cadastro de ${assistido.nome}? Essa ação não pode ser desfeita.`,
+      )
+    )
+      return;
+    try {
+      await api.delete(`/assistidos/${assistido.id}`);
+      navigate("/assistidos");
+    } catch (err) {
+      alert(err.response?.data?.erro || "Erro ao excluir.");
+    }
+  }
+
+  function formatarCpf(cpf) {
+    const n = String(cpf || "").replace(/\D/g, "");
+    return n.length === 11
+      ? n.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
+      : "Não informado";
+  }
+
+  function formatarData(data) {
+    return data ? data.split("-").reverse().join("/") : "Não informada";
+  }
+
+  function montarEndereco(a) {
+    const partes = [
+      a.logradouro && a.numero ? `${a.logradouro}, ${a.numero}` : a.logradouro,
+      a.complemento,
+      a.bairro,
+      a.cidade,
+      a.cep,
+    ].filter(Boolean);
+    return partes.length ? partes.join(" — ") : "Não informado";
+  }
+
+  if (naoEncontrado)
+    return (
+      <AppLayout>
+        <p>Pessoa assistida não encontrada.</p>
+      </AppLayout>
+    );
 
   if (!assistido)
     return (
@@ -52,7 +114,7 @@ export default function DetalhesAssistido() {
           <div className="info-grid">
             <div className="info-item">
               <label>Código</label>
-              <p>{assistido.codigo}</p>
+              <p>{`PAS-${String(assistido.id).padStart(4, "0")}`}</p>
             </div>
             <div className="info-item">
               <label>Status</label>
@@ -66,11 +128,11 @@ export default function DetalhesAssistido() {
             </div>
             <div className="info-item">
               <label>CPF</label>
-              <p>{assistido.cpf ? "***.***.***-**" : "Não informado"}</p>
+              <p>{formatarCpf(assistido.cpf)}</p>
             </div>
             <div className="info-item">
               <label>Data de nascimento</label>
-              <p>{assistido.dataNascimento}</p>
+              <p>{formatarData(assistido.data_nascimento)}</p>
             </div>
             <div className="info-item">
               <label>E-mail</label>
@@ -82,7 +144,7 @@ export default function DetalhesAssistido() {
             </div>
             <div className="info-item">
               <label>Endereço</label>
-              <p>{assistido.endereco}</p>
+              <p>{montarEndereco(assistido)}</p>
             </div>
           </div>
         </div>
@@ -94,44 +156,18 @@ export default function DetalhesAssistido() {
           >
             Editar cadastro
           </Button>
-          <Button variant="outline">
+          <Button variant="outline" onClick={alternarStatus}>
             {assistido.status === "Ativo"
               ? "Inativar cadastro"
               : "Ativar cadastro"}
+          </Button>
+          <Button variant="outline" onClick={excluir}>
+            Excluir cadastro
           </Button>
         </div>
 
         <div className="info-card">
           <h3>Histórico de acolhimento</h3>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              marginBottom: "16px",
-            }}
-          >
-            <div
-              style={{
-                background: "var(--color-bg-body)",
-                padding: "8px",
-                borderRadius: "50%",
-              }}
-            >
-              <Calendar size={20} color="var(--color-primary)" />
-            </div>
-            <div>
-              <p style={{ fontWeight: 500 }}>Ação comunitária</p>
-              <p
-                style={{
-                  fontSize: "0.75rem",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                07/11/2026 • 4 horas • Presente
-              </p>
-            </div>
-          </div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <div
               style={{
@@ -142,17 +178,9 @@ export default function DetalhesAssistido() {
             >
               <Calendar size={20} color="var(--color-primary)" />
             </div>
-            <div>
-              <p style={{ fontWeight: 500 }}>Mutirão do bem</p>
-              <p
-                style={{
-                  fontSize: "0.75rem",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                31/10/2026 • 6 horas • Presente
-              </p>
-            </div>
+            <p style={{ fontSize: "0.875rem" }}>
+              O histórico de acolhimento ainda será implementado.
+            </p>
           </div>
         </div>
       </div>
