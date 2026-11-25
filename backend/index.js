@@ -13,8 +13,6 @@ app.use(cors());
 app.use(express.json());
 
 // ---------- Segredo usado para assinar as chaves de acesso (tokens) ----------
-// Na primeira vez que o servidor liga, ele cria um segredo aleatório e guarda
-// no arquivo segredo_jwt.txt. Nunca compartilhe esse arquivo com ninguém.
 const arquivoSegredo = path.join(__dirname, 'segredo_jwt.txt');
 if (!fs.existsSync(arquivoSegredo)) {
     fs.writeFileSync(arquivoSegredo, crypto.randomBytes(48).toString('hex'));
@@ -22,7 +20,7 @@ if (!fs.existsSync(arquivoSegredo)) {
 const SEGREDO = fs.readFileSync(arquivoSegredo, 'utf8').trim();
 
 // ---------- Proteção contra tentativas em excesso de adivinhar a senha ----------
-const tentativas = {}; // guarda, por endereço, quantas vezes errou
+const tentativas = {};
 const MAX_TENTATIVAS = 5;
 const BLOQUEIO_MS = 15 * 60 * 1000; // 15 minutos
 
@@ -104,7 +102,6 @@ app.post('/login', (req, res) => {
         }
 
         const encontrado = resultados[0];
-        // A mensagem é a mesma para usuário errado e senha errada, de propósito
         const mensagemErro = 'Usuário ou senha incorretos.';
 
         if (!encontrado) {
@@ -144,7 +141,7 @@ function autenticar(req, res, next) {
         if (erro) {
             return res.status(401).json({ erro: 'Sessão expirada. Faça login de novo.' });
         }
-        req.usuarioLogado = dados;
+        req.usuarioLogado = dados; // { id, usuario }
         next();
     });
 }
@@ -196,38 +193,47 @@ app.post('/trocar-senha', autenticar, (req, res) => {
 
 // =====================================================================
 //                              VOLUNTÁRIOS
+//   Cada usuário só enxerga e altera os voluntários que ele mesmo cadastrou
 // =====================================================================
 
-// Daqui para baixo, todas as rotas de /voluntarios exigem login
 app.use('/voluntarios', autenticar);
 
 const CAMPOS_VOLUNTARIO = `id, nome, email, telefone, cpf, sexo, idade, estado_civil, status,
     DATE_FORMAT(data_nascimento, '%Y-%m-%d') AS data_nascimento,
     cep, logradouro, numero, complemento, bairro, cidade`;
 
-// Listar todos os voluntários
+// Listar os voluntários do usuário logado
 app.get('/voluntarios', (req, res) => {
-    conexao.query(`SELECT ${CAMPOS_VOLUNTARIO} FROM voluntarios ORDER BY id DESC`, (erro, resultados) => {
-        if (erro) {
-            console.log('ERRO AO LISTAR VOLUNTÁRIOS:', erro);
-            return res.status(500).json({ erro: 'Erro ao buscar voluntários' });
+    conexao.query(
+        `SELECT ${CAMPOS_VOLUNTARIO} FROM voluntarios WHERE usuario_id = ? ORDER BY id DESC`,
+        [req.usuarioLogado.id],
+        (erro, resultados) => {
+            if (erro) {
+                console.log('ERRO AO LISTAR VOLUNTÁRIOS:', erro);
+                return res.status(500).json({ erro: 'Erro ao buscar voluntários' });
+            }
+            res.json(resultados);
         }
-        res.json(resultados);
-    });
+    );
 });
 
-// Buscar um voluntário pelo id
+// Buscar um voluntário (só se for do usuário logado)
 app.get('/voluntarios/:id', (req, res) => {
-    conexao.query(`SELECT ${CAMPOS_VOLUNTARIO} FROM voluntarios WHERE id = ?`, [req.params.id], (erro, resultados) => {
-        if (erro) {
-            return res.status(500).json({ erro: 'Erro ao buscar voluntário' });
+    conexao.query(
+        `SELECT ${CAMPOS_VOLUNTARIO} FROM voluntarios WHERE id = ? AND usuario_id = ?`,
+        [req.params.id, req.usuarioLogado.id],
+        (erro, resultados) => {
+            if (erro) {
+                return res.status(500).json({ erro: 'Erro ao buscar voluntário' });
+            }
+            res.json(resultados[0]);
         }
-        res.json(resultados[0]);
-    });
+    );
 });
 
 // Cadastrar um novo voluntário
 app.post('/voluntarios', (req, res) => {
+    const donoId = req.usuarioLogado.id;
     const { nome, email, telefone, sexo, estado_civil } = req.body;
     const cpf = limparCpf(req.body.cpf);
 
@@ -235,19 +241,19 @@ app.post('/voluntarios', (req, res) => {
         return res.status(400).json({ erro: 'CPF inválido. Confira os 11 números.' });
     }
 
-    conexao.query('SELECT id FROM voluntarios WHERE cpf = ?', [cpf], (erro, existentes) => {
+    conexao.query('SELECT id FROM voluntarios WHERE cpf = ? AND usuario_id = ?', [cpf, donoId], (erro, existentes) => {
         if (erro) {
             return res.status(500).json({ erro: 'Erro ao verificar o CPF' });
         }
         if (existentes.length > 0) {
-            return res.status(409).json({ erro: 'Já existe um voluntário cadastrado com este CPF.' });
+            return res.status(409).json({ erro: 'Você já cadastrou um voluntário com este CPF.' });
         }
         const sql = `INSERT INTO voluntarios
-            (nome, email, telefone, cpf, sexo, idade, estado_civil,
+            (usuario_id, nome, email, telefone, cpf, sexo, idade, estado_civil,
              data_nascimento, cep, logradouro, numero, complemento, bairro, cidade)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         const valores = [
-            nome, email, telefone, cpf, sexo, vazioParaNulo(req.body.idade), estado_civil,
+            donoId, nome, email, telefone, cpf, sexo, vazioParaNulo(req.body.idade), estado_civil,
             vazioParaNulo(req.body.data_nascimento), vazioParaNulo(req.body.cep),
             vazioParaNulo(req.body.logradouro), vazioParaNulo(req.body.numero),
             vazioParaNulo(req.body.complemento), vazioParaNulo(req.body.bairro),
@@ -263,8 +269,9 @@ app.post('/voluntarios', (req, res) => {
     });
 });
 
-// Atualizar um voluntário
+// Atualizar um voluntário (só se for do usuário logado)
 app.put('/voluntarios/:id', (req, res) => {
+    const donoId = req.usuarioLogado.id;
     const { id } = req.params;
     const { nome, email, telefone, sexo, estado_civil } = req.body;
     const cpf = limparCpf(req.body.cpf);
@@ -273,26 +280,30 @@ app.put('/voluntarios/:id', (req, res) => {
         return res.status(400).json({ erro: 'CPF inválido. Confira os 11 números.' });
     }
 
-    conexao.query('SELECT id FROM voluntarios WHERE cpf = ? AND id <> ?', [cpf, id], (erro, existentes) => {
+    conexao.query('SELECT id FROM voluntarios WHERE cpf = ? AND usuario_id = ? AND id <> ?', [cpf, donoId, id], (erro, existentes) => {
         if (erro) {
             return res.status(500).json({ erro: 'Erro ao verificar o CPF' });
         }
         if (existentes.length > 0) {
-            return res.status(409).json({ erro: 'Já existe outro voluntário cadastrado com este CPF.' });
+            return res.status(409).json({ erro: 'Você já cadastrou outro voluntário com este CPF.' });
         }
         const sql = `UPDATE voluntarios SET nome=?, email=?, telefone=?, cpf=?, sexo=?, idade=?, estado_civil=?,
-            data_nascimento=?, cep=?, logradouro=?, numero=?, complemento=?, bairro=?, cidade=? WHERE id=?`;
+            data_nascimento=?, cep=?, logradouro=?, numero=?, complemento=?, bairro=?, cidade=?
+            WHERE id=? AND usuario_id=?`;
         const valores = [
             nome, email, telefone, cpf, sexo, vazioParaNulo(req.body.idade), estado_civil,
             vazioParaNulo(req.body.data_nascimento), vazioParaNulo(req.body.cep),
             vazioParaNulo(req.body.logradouro), vazioParaNulo(req.body.numero),
             vazioParaNulo(req.body.complemento), vazioParaNulo(req.body.bairro),
-            vazioParaNulo(req.body.cidade), id
+            vazioParaNulo(req.body.cidade), id, donoId
         ];
-        conexao.query(sql, valores, (erroGravar) => {
+        conexao.query(sql, valores, (erroGravar, resultado) => {
             if (erroGravar) {
                 console.log('ERRO AO ATUALIZAR VOLUNTÁRIO:', erroGravar);
                 return res.status(500).json({ erro: 'Erro ao atualizar voluntário' });
+            }
+            if (resultado.affectedRows === 0) {
+                return res.status(404).json({ erro: 'Voluntário não encontrado.' });
             }
             res.json({ mensagem: 'Voluntário atualizado com sucesso!' });
         });
@@ -305,31 +316,44 @@ app.patch('/voluntarios/:id/status', (req, res) => {
     if (!['Ativo', 'Inativo'].includes(status)) {
         return res.status(400).json({ erro: 'Status inválido.' });
     }
-    conexao.query('UPDATE voluntarios SET status = ? WHERE id = ?', [status, req.params.id], (erro) => {
-        if (erro) {
-            return res.status(500).json({ erro: 'Erro ao alterar status' });
+    conexao.query(
+        'UPDATE voluntarios SET status = ? WHERE id = ? AND usuario_id = ?',
+        [status, req.params.id, req.usuarioLogado.id],
+        (erro, resultado) => {
+            if (erro) {
+                return res.status(500).json({ erro: 'Erro ao alterar status' });
+            }
+            if (resultado.affectedRows === 0) {
+                return res.status(404).json({ erro: 'Voluntário não encontrado.' });
+            }
+            res.json({ mensagem: 'Status atualizado!' });
         }
-        res.json({ mensagem: 'Status atualizado!' });
-    });
+    );
 });
 
 // Deletar um voluntário
 app.delete('/voluntarios/:id', (req, res) => {
-    const { id } = req.params;
-    conexao.query('DELETE FROM voluntarios WHERE id = ?', [id], (erro) => {
-        if (erro) {
-            return res.status(500).json({ erro: 'Erro ao deletar voluntário' });
+    conexao.query(
+        'DELETE FROM voluntarios WHERE id = ? AND usuario_id = ?',
+        [req.params.id, req.usuarioLogado.id],
+        (erro, resultado) => {
+            if (erro) {
+                return res.status(500).json({ erro: 'Erro ao deletar voluntário' });
+            }
+            if (resultado.affectedRows === 0) {
+                return res.status(404).json({ erro: 'Voluntário não encontrado.' });
+            }
+            res.json({ mensagem: 'Voluntário deletado com sucesso!' });
         }
-        res.json({ mensagem: 'Voluntário deletado com sucesso!' });
-    });
+    );
 });
 
 
 // =====================================================================
 //                          PESSOAS ASSISTIDAS
+//   Cada usuário só enxerga e altera as pessoas que ele mesmo cadastrou
 // =====================================================================
 
-// Todas as rotas de /assistidos exigem login
 app.use('/assistidos', autenticar);
 
 const CAMPOS_ASSISTIDO = `id, nome, cpf, DATE_FORMAT(data_nascimento, '%Y-%m-%d') AS data_nascimento,
@@ -361,24 +385,32 @@ function validarAssistido(a) {
     return null;
 }
 
-// Listar
+// Listar as pessoas assistidas do usuário logado
 app.get('/assistidos', (req, res) => {
-    conexao.query(`SELECT ${CAMPOS_ASSISTIDO} FROM assistidos ORDER BY id DESC`, (erro, resultados) => {
-        if (erro) {
-            return res.status(500).json({ erro: 'Erro ao buscar pessoas assistidas' });
+    conexao.query(
+        `SELECT ${CAMPOS_ASSISTIDO} FROM assistidos WHERE usuario_id = ? ORDER BY id DESC`,
+        [req.usuarioLogado.id],
+        (erro, resultados) => {
+            if (erro) {
+                return res.status(500).json({ erro: 'Erro ao buscar pessoas assistidas' });
+            }
+            res.json(resultados);
         }
-        res.json(resultados);
-    });
+    );
 });
 
-// Buscar uma
+// Buscar uma (só se for do usuário logado)
 app.get('/assistidos/:id', (req, res) => {
-    conexao.query(`SELECT ${CAMPOS_ASSISTIDO} FROM assistidos WHERE id = ?`, [req.params.id], (erro, resultados) => {
-        if (erro) {
-            return res.status(500).json({ erro: 'Erro ao buscar pessoa assistida' });
+    conexao.query(
+        `SELECT ${CAMPOS_ASSISTIDO} FROM assistidos WHERE id = ? AND usuario_id = ?`,
+        [req.params.id, req.usuarioLogado.id],
+        (erro, resultados) => {
+            if (erro) {
+                return res.status(500).json({ erro: 'Erro ao buscar pessoa assistida' });
+            }
+            res.json(resultados[0]);
         }
-        res.json(resultados[0]);
-    });
+    );
 });
 
 // Cadastrar
@@ -390,14 +422,14 @@ app.post('/assistidos', (req, res) => {
     }
 
     const sql = `INSERT INTO assistidos
-        (nome, cpf, data_nascimento, email, telefone, cep, logradouro, numero, complemento, bairro, cidade)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    const valores = [a.nome, a.cpf, a.data_nascimento, a.email, a.telefone, a.cep, a.logradouro, a.numero, a.complemento, a.bairro, a.cidade];
+        (usuario_id, nome, cpf, data_nascimento, email, telefone, cep, logradouro, numero, complemento, bairro, cidade)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const valores = [req.usuarioLogado.id, a.nome, a.cpf, a.data_nascimento, a.email, a.telefone, a.cep, a.logradouro, a.numero, a.complemento, a.bairro, a.cidade];
 
     conexao.query(sql, valores, (erro, resultado) => {
         if (erro) {
             if (erro.code === 'ER_DUP_ENTRY') {
-                return res.status(409).json({ erro: 'Já existe uma pessoa assistida com este CPF.' });
+                return res.status(409).json({ erro: 'Você já cadastrou uma pessoa assistida com este CPF.' });
             }
             console.log('ERRO AO CADASTRAR ASSISTIDO:', erro);
             return res.status(500).json({ erro: 'Erro ao cadastrar pessoa assistida' });
@@ -406,7 +438,7 @@ app.post('/assistidos', (req, res) => {
     });
 });
 
-// Atualizar
+// Atualizar (só se for do usuário logado)
 app.put('/assistidos/:id', (req, res) => {
     const a = lerAssistido(req.body);
     const erroValidacao = validarAssistido(a);
@@ -415,16 +447,20 @@ app.put('/assistidos/:id', (req, res) => {
     }
 
     const sql = `UPDATE assistidos SET nome=?, cpf=?, data_nascimento=?, email=?, telefone=?,
-        cep=?, logradouro=?, numero=?, complemento=?, bairro=?, cidade=? WHERE id=?`;
-    const valores = [a.nome, a.cpf, a.data_nascimento, a.email, a.telefone, a.cep, a.logradouro, a.numero, a.complemento, a.bairro, a.cidade, req.params.id];
+        cep=?, logradouro=?, numero=?, complemento=?, bairro=?, cidade=?
+        WHERE id=? AND usuario_id=?`;
+    const valores = [a.nome, a.cpf, a.data_nascimento, a.email, a.telefone, a.cep, a.logradouro, a.numero, a.complemento, a.bairro, a.cidade, req.params.id, req.usuarioLogado.id];
 
-    conexao.query(sql, valores, (erro) => {
+    conexao.query(sql, valores, (erro, resultado) => {
         if (erro) {
             if (erro.code === 'ER_DUP_ENTRY') {
-                return res.status(409).json({ erro: 'Já existe outra pessoa assistida com este CPF.' });
+                return res.status(409).json({ erro: 'Você já cadastrou outra pessoa assistida com este CPF.' });
             }
             console.log('ERRO AO ATUALIZAR ASSISTIDO:', erro);
             return res.status(500).json({ erro: 'Erro ao atualizar pessoa assistida' });
+        }
+        if (resultado.affectedRows === 0) {
+            return res.status(404).json({ erro: 'Pessoa assistida não encontrada.' });
         }
         res.json({ mensagem: 'Pessoa assistida atualizada com sucesso!' });
     });
@@ -436,21 +472,113 @@ app.patch('/assistidos/:id/status', (req, res) => {
     if (!['Ativo', 'Inativo'].includes(status)) {
         return res.status(400).json({ erro: 'Status inválido.' });
     }
-    conexao.query('UPDATE assistidos SET status = ? WHERE id = ?', [status, req.params.id], (erro) => {
-        if (erro) {
-            return res.status(500).json({ erro: 'Erro ao alterar status' });
+    conexao.query(
+        'UPDATE assistidos SET status = ? WHERE id = ? AND usuario_id = ?',
+        [status, req.params.id, req.usuarioLogado.id],
+        (erro, resultado) => {
+            if (erro) {
+                return res.status(500).json({ erro: 'Erro ao alterar status' });
+            }
+            if (resultado.affectedRows === 0) {
+                return res.status(404).json({ erro: 'Pessoa assistida não encontrada.' });
+            }
+            res.json({ mensagem: 'Status atualizado!' });
         }
-        res.json({ mensagem: 'Status atualizado!' });
-    });
+    );
 });
 
 // Excluir
 app.delete('/assistidos/:id', (req, res) => {
-    conexao.query('DELETE FROM assistidos WHERE id = ?', [req.params.id], (erro) => {
-        if (erro) {
-            return res.status(500).json({ erro: 'Erro ao excluir pessoa assistida' });
+    conexao.query(
+        'DELETE FROM assistidos WHERE id = ? AND usuario_id = ?',
+        [req.params.id, req.usuarioLogado.id],
+        (erro, resultado) => {
+            if (erro) {
+                return res.status(500).json({ erro: 'Erro ao excluir pessoa assistida' });
+            }
+            if (resultado.affectedRows === 0) {
+                return res.status(404).json({ erro: 'Pessoa assistida não encontrada.' });
+            }
+            res.json({ mensagem: 'Pessoa assistida excluída com sucesso!' });
         }
-        res.json({ mensagem: 'Pessoa assistida excluída com sucesso!' });
+    );
+});
+
+
+// =====================================================================
+//                       USUÁRIOS DO SISTEMA (LOGIN)
+// =====================================================================
+
+app.use('/usuarios', autenticar);
+
+// Listar usuários (nunca devolve a senha)
+app.get('/usuarios', (req, res) => {
+    conexao.query('SELECT id, nome, usuario FROM usuarios ORDER BY nome', (erro, resultados) => {
+        if (erro) {
+            return res.status(500).json({ erro: 'Erro ao buscar usuários' });
+        }
+        res.json(resultados);
+    });
+});
+
+// Cadastrar usuário
+app.post('/usuarios', async (req, res) => {
+    const nome = String(req.body.nome || '').trim();
+    const usuario = String(req.body.usuario || '').trim();
+    const senha = String(req.body.senha || '');
+
+    if (nome.length < 3 || usuario.length < 3 || /\s/.test(usuario)) {
+        return res.status(400).json({ erro: 'Nome ou usuário inválido. O usuário não pode ter espaços.' });
+    }
+    if (senha.length < 8) {
+        return res.status(400).json({ erro: 'A senha precisa ter pelo menos 8 caracteres.' });
+    }
+
+    try {
+        const senhaHash = await bcrypt.hash(senha, 10);
+        conexao.query(
+            'INSERT INTO usuarios (nome, usuario, senha_hash) VALUES (?, ?, ?)',
+            [nome, usuario, senhaHash],
+            (erro, resultado) => {
+                if (erro) {
+                    if (erro.code === 'ER_DUP_ENTRY') {
+                        return res.status(409).json({ erro: 'Esse nome de usuário já existe. Escolha outro.' });
+                    }
+                    console.log('ERRO AO CRIAR USUÁRIO:', erro);
+                    return res.status(500).json({ erro: 'Erro ao criar o usuário' });
+                }
+                res.status(201).json({ mensagem: 'Usuário criado com sucesso!', id: resultado.insertId });
+            }
+        );
+    } catch (erroHash) {
+        res.status(500).json({ erro: 'Erro ao criar o usuário' });
+    }
+});
+
+// Excluir usuário (não deixa excluir a si mesmo, o último usuário, nem quem tem cadastros)
+app.delete('/usuarios/:id', (req, res) => {
+    const id = Number(req.params.id);
+
+    if (id === req.usuarioLogado.id) {
+        return res.status(400).json({ erro: 'Você não pode excluir o seu próprio usuário.' });
+    }
+
+    conexao.query('SELECT COUNT(*) AS total FROM usuarios', (erro, resultados) => {
+        if (erro) {
+            return res.status(500).json({ erro: 'Erro ao excluir usuário' });
+        }
+        if (resultados[0].total <= 1) {
+            return res.status(400).json({ erro: 'Não é possível excluir o último usuário.' });
+        }
+        conexao.query('DELETE FROM usuarios WHERE id = ?', [id], (erroExcluir) => {
+            if (erroExcluir) {
+                if (erroExcluir.code === 'ER_ROW_IS_REFERENCED_2') {
+                    return res.status(409).json({ erro: 'Esse usuário ainda tem voluntários ou pessoas assistidas cadastrados e não pode ser excluído.' });
+                }
+                return res.status(500).json({ erro: 'Erro ao excluir usuário' });
+            }
+            res.json({ mensagem: 'Usuário excluído com sucesso!' });
+        });
     });
 });
 

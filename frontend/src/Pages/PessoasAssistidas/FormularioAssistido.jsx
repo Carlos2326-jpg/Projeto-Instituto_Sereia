@@ -2,15 +2,21 @@ import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { AppLayout } from "../../Components/layout/AppLayout";
 import { FormularioPessoa } from "../../Components/layout/FormularioPessoa";
-import { voluntarioService } from "../../Services/voluntariosService";
+import { assistidoService } from "../../Services/assistidosService";
 
-export default function FormularioVoluntario() {
+export default function FormularioAssistido() {
   const { id } = useParams();
   const [dadosIniciais, setDadosIniciais] = useState(null);
 
   useEffect(() => {
     if (id) {
-      voluntarioService.buscarPorId(id).then(setDadosIniciais);
+      assistidoService.buscarPorId(id).then((dados) => {
+        // troca valores vazios (null) por texto vazio
+        const limpos = Object.fromEntries(
+          Object.entries(dados || {}).map(([k, v]) => [k, v ?? ""]),
+        );
+        setDadosIniciais(limpos);
+      });
     } else {
       setDadosIniciais({
         nome: "",
@@ -32,8 +38,8 @@ export default function FormularioVoluntario() {
 
   const onSalvar = (dados) => {
     return id
-      ? voluntarioService.atualizar(id, dados)
-      : voluntarioService.criar(dados);
+      ? assistidoService.atualizar(id, dados)
+      : assistidoService.criar(dados);
   };
 
   return (
@@ -45,7 +51,7 @@ export default function FormularioVoluntario() {
         rotaVoltar="/assistidos"
         dadosIniciais={dadosIniciais}
         onSalvar={onSalvar}
-        camposOpcionais={["cpf", "email"]} // A grande diferença!
+        camposOpcionais={["cpf", "email"]}
       />
     </AppLayout>
   );

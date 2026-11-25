@@ -2,22 +2,6 @@ CREATE DATABASE IF NOT EXISTS instituto_sereia
   CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 USE instituto_sereia;
 
-CREATE TABLE IF NOT EXISTS assistidos (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  nome VARCHAR(150) NOT NULL,
-  cpf CHAR(11) UNIQUE,
-  data_nascimento DATE,
-  email VARCHAR(150),
-  telefone VARCHAR(30) NOT NULL,
-  cep VARCHAR(9),
-  logradouro VARCHAR(150),
-  numero VARCHAR(10),
-  complemento VARCHAR(80),
-  bairro VARCHAR(80),
-  cidade VARCHAR(100),
-  status VARCHAR(10) NOT NULL DEFAULT 'Ativo'
-);
-
 CREATE TABLE IF NOT EXISTS usuarios (
   id INT AUTO_INCREMENT PRIMARY KEY,
   nome VARCHAR(100) NOT NULL,
@@ -27,10 +11,11 @@ CREATE TABLE IF NOT EXISTS usuarios (
 
 CREATE TABLE IF NOT EXISTS voluntarios (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  usuario_id INT NOT NULL,
   nome VARCHAR(150) NOT NULL,
   email VARCHAR(150),
   telefone VARCHAR(30),
-  cpf CHAR(11) NOT NULL UNIQUE,
+  cpf CHAR(11) NOT NULL,
   sexo VARCHAR(20),
   idade INT,
   estado_civil VARCHAR(30),
@@ -41,5 +26,26 @@ CREATE TABLE IF NOT EXISTS voluntarios (
   numero VARCHAR(10),
   complemento VARCHAR(80),
   bairro VARCHAR(80),
-  cidade VARCHAR(100)
+  cidade VARCHAR(100),
+  UNIQUE KEY uq_voluntarios_usuario_cpf (usuario_id, cpf),
+  CONSTRAINT fk_voluntarios_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+);
+
+CREATE TABLE IF NOT EXISTS assistidos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  usuario_id INT NOT NULL,
+  nome VARCHAR(150) NOT NULL,
+  cpf CHAR(11),
+  data_nascimento DATE,
+  email VARCHAR(150),
+  telefone VARCHAR(30) NOT NULL,
+  cep VARCHAR(9),
+  logradouro VARCHAR(150),
+  numero VARCHAR(10),
+  complemento VARCHAR(80),
+  bairro VARCHAR(80),
+  cidade VARCHAR(100),
+  status VARCHAR(10) NOT NULL DEFAULT 'Ativo',
+  UNIQUE KEY uq_assistidos_usuario_cpf (usuario_id, cpf),
+  CONSTRAINT fk_assistidos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
